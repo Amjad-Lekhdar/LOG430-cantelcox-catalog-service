@@ -1,0 +1,71 @@
+services:
+  catalog-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cantelcox-catalog-service
+    restart: unless-stopped
+    ports:
+      - "8040:8040"
+    environment:
+      SERVICE_NAME: catalog-service
+      DATABASE_URL: postgresql+psycopg://cantelcox:cantelcox@postgres:5432/cantelcox_catalog
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8040/health\", timeout=3)'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - catalog-network
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: cantelcox-catalog-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: cantelcox
+      POSTGRES_PASSWORD: cantelcox
+      POSTGRES_DB: cantelcox_catalog
+    volumes:
+      - catalog-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cantelcox -d cantelcox_catalog"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - catalog-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: cantelcox-catalog-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - catalog-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - catalog-network
+
+volumes:
+  catalog-postgres-data:
+  catalog-redis-data:
+
+networks:
+  catalog-network:
+    driver: bridge
